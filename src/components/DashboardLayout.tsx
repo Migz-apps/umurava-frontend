@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   LogOut,
   Network,
+  Plus,
   Settings,
   Upload,
   User,
@@ -25,7 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { useAppDispatch } from "@/store";
-import { logout } from "@/store/slices/authSlice";
+import { logoutUser } from "@/store/slices/authSlice";
 import TopBar from "./TopBar";
 import UmuravaLogo from "./UmuravaLogo";
 
@@ -66,6 +67,7 @@ const RECRUITER_NAV = [
   {
     section: "MANAGEMENT",
     items: [
+      { label: "Add Applicant", icon: Plus, path: "/applicants/new" },
       { label: "Upload Applicants", icon: Upload, path: "/upload-applicants" },
       { label: "Reports", icon: FileText, path: "/reports" },
       { label: "Settings", icon: Settings, path: "/settings" },
@@ -98,7 +100,7 @@ export default function DashboardLayout({
   const navSections = userType === "talent" ? TALENT_NAV : RECRUITER_NAV;
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(logoutUser());
     router.push("/login");
   };
 
@@ -169,7 +171,7 @@ export default function DashboardLayout({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onMenuClick={() => setMobileOpen(true)} notifications={[]} />
+        <TopBar onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>

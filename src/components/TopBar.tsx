@@ -2,34 +2,31 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, KeyRound, LogOut, Menu, User as UserIcon } from "lucide-react";
-import { notify } from "@/lib/notify";
+import { Bell, KeyRound, LogOut, Menu, User as UserIcon, CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react";
+import { notify, notificationStore, NotificationItem } from "@/lib/notify";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { logout } from "@/store/slices/authSlice";
-
-interface Notification {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-}
+import { logoutUser } from "@/store/slices/authSlice";
 
 interface TopBarProps {
   onMenuClick: () => void;
-  notifications?: Notification[];
 }
 
 export default function TopBar({
   onMenuClick,
-  notifications = [],
 }: TopBarProps) {
   const [openNotif, setOpenNotif] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+
+  useEffect(() => {
+    const unsubscribe = notificationStore.subscribe(setNotifications);
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -46,8 +43,7 @@ export default function TopBar({
   }, []);
 
   const profile = useMemo(() => {
-    const fullName =
-      [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "John Doe";
+    const fullName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "John Doe";
     const initials = fullName
       .split(" ")
       .map((part) => part[0])
@@ -62,9 +58,18 @@ export default function TopBar({
     };
   }, [user]);
 
+  const unreadCount = notificationStore.getUnreadCount();
+
+  const handleNotificationClick = () => {
+    setOpenNotif(!openNotif);
+    if (!openNotif) {
+      notificationStore.markAllAsRead();
+    }
+  };
+
   const handleLogout = () => {
     setOpenProfile(false);
-    dispatch(logout());
+    dispatch(logoutUser());
     notify.success("Logged out", "See you again soon!");
     router.push("/login");
   };
@@ -82,16 +87,15 @@ export default function TopBar({
       <div className="flex items-center gap-2 sm:gap-4">
         <div className="relative" ref={notifRef}>
           <button
-            onClick={() => {
-              setOpenNotif((value) => !value);
-              setOpenProfile(false);
-            }}
+            onClick={handleNotificationClick}
             className="relative rounded-lg p-2 hover:bg-muted"
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5 text-muted-foreground" />
-            {notifications.length > 0 && (
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </button>
           {openNotif && (
@@ -105,20 +109,35 @@ export default function TopBar({
                 </p>
               ) : (
                 <div className="max-h-80 overflow-y-auto">
-                  {notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className="border-b border-border px-4 py-3 last:border-0 hover:bg-muted"
-                    >
-                      <p className="text-sm font-medium text-foreground">
-                        {notification.title}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {notification.description}
-                      </p>
-                      <p className="mt-1 text-xs text-primary">{notification.time}</p>
-                    </div>
-                  ))}
+                  {notifications.map((notification) => {
+                    const Icon = notification.type === "success" ? CheckCircle2 :
+                                 notification.type === "error" ? AlertCircle :
+                                 notification.type === "warning" ? AlertTriangle : Info;
+                    const iconColor = notification.type === "success" ? "text-success" :
+                                    notification.type === "error" ? "text-destructive" :
+                                    notification.type === "warning" ? "text-warning" : "text-primary";
+                    return (
+                      <div
+                        key={notification.id}
+                        className="border-b border-border px-4 py-3 last:border-0 hover:bg-muted"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Icon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${iconColor}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground">
+                              {notification.title}
+                            </p>
+                            {notification.description && (
+                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                                {notification.description}
+                              </p>
+                            )}
+                            <p className="mt-1 text-xs text-primary">{notification.time}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
