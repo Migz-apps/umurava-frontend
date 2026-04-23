@@ -164,8 +164,26 @@ export default function AIScreeningPage() {
             
             if (response.data.status === "completed") {
               notify.success("Screening completed successfully", undefined, true);
+              
+              // Show warning if fallback API key was used
+              if (response.data.result?.fallbackUsed || response.data.result?.usingServerKey) {
+                notify.warning(
+                  "Using default API key",
+                  "We used a fallback API key for AI screening. Next time, add your own API key in Settings for better performance and reliability, as the default key may have rate limits.",
+                  true
+                );
+              }
             } else {
               notify.error("Screening failed");
+              
+              // Show warning if fallback API key failed
+              if (response.data.errorDetails?.fallbackUsed) {
+                notify.error(
+                  "Fallback API key failed",
+                  "The fallback API key encountered an error. Please add your own Gemini API key in Settings for reliable AI screening.",
+                  true
+                );
+              }
             }
           }
         }
