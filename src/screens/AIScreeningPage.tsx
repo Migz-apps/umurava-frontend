@@ -82,6 +82,8 @@ export default function AIScreeningPage() {
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [loadingApplicants, setLoadingApplicants] = useState(true);
   const [loadingResult, setLoadingResult] = useState(!!preselectedScreeningId);
+  const [showFallbackModal, setShowFallbackModal] = useState(false);
+  const [screeningPayload, setScreeningPayload] = useState<any>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [applicantSearch, setApplicantSearch] = useState("");
   const [searchField, setSearchField] = useState<"name" | "skills" | "experience">("name");
@@ -164,8 +166,40 @@ export default function AIScreeningPage() {
             
             if (response.data.status === "completed") {
               notify.success("Screening completed successfully", undefined, true);
+              
+              // Show warning if fallback API key was used
+              if (response.data.result?.fallbackUsed || response.data.result?.usingServerKey) {
+                notify.warning(
+                  "Using default API key",
+                  "We used a fallback API key for AI screening. Next time, add your own API key in Settings for better performance and reliability, as the default key may have rate limits.",
+                  true
+                );
+              }
             } else {
-              notify.error("Screening failed");
+              // Check if error message indicates AI evaluation failure
+              const errorMessage = response.data.message || response.data.errorMessage || "";
+              if (errorMessage.toLowerCase().includes("ai evaluation failed") || 
+                  errorMessage.toLowerCase().includes("api quota") ||
+                  errorMessage.toLowerCase().includes("authentication failed") ||
+                  errorMessage.toLowerCase().includes("network timeout") ||
+                  errorMessage.toLowerCase().includes("gemini retry")) {
+                notify.error(
+                  "AI evaluation failed",
+                  "The AI service encountered an error during evaluation. The system fell back to rule-based scoring. Please check your API key configuration or try again later.",
+                  true
+                );
+              } else {
+                notify.error("Screening failed");
+              }
+              
+              // Show warning if fallback API key failed
+              if (response.data.errorDetails?.fallbackUsed) {
+                notify.error(
+                  "Fallback API key failed",
+                  "The fallback API key encountered an error. Please add your own Gemini API key in Settings for reliable AI screening.",
+                  true
+                );
+              }
             }
           }
         }
@@ -177,7 +211,7 @@ export default function AIScreeningPage() {
     return () => clearInterval(interval);
   }, [screeningRequestId, result?.status]);
 
-  const handleStartScreening = async () => {
+  const handleStartScreening = async (confirmFallback: boolean = false) => {
     if (!selectedJobId) {
       notify.error("Please select a job");
       return;
@@ -185,27 +219,36 @@ export default function AIScreeningPage() {
 
     setScreening(true);
     try {
-      const response = await apiClient.post<any>("/screenings", {
+      const payload = {
         jobId: selectedJobId,
         applicantIds: selectedApplicants.length > 0 ? selectedApplicants : undefined,
         shortlistSize: shortlistSize as 5 | 10 | 15 | 20,
-      });
+        confirmFallback,
+      };
+
+      const response = await apiClient.post<any>("/screenings", payload);
 
       if (response.success) {
         setScreeningRequestId(response.data.screeningRequestId);
         setResult(response.data);
-        notify.success("Screening started", undefined, true);
-        
-        // Show warning if fallback API key was used
-        if (response.data.fallbackUsed || response.data.result?.fallbackUsed) {
-          notify.warning(
-            "Using default API key",
-            "We used a fallback API key for AI screening. Next time, add your own API key in Settings for better performance and reliability, as the default key may have rate limits.",
-            true
-          );
-        }
+        setShowFallbackModal(false);
+        notify.success("AI screening started", undefined, true);
+      } else if (response.error === 'API key required' && response.data?.requiresApiKey) {
+        notify.error(
+          "API key required",
+          response.data.message || "AI screening requires a Gemini API key. Please add your API key in Settings.",
+          true
+        );
+      } else if (response.error === 'Fallback API key confirmation required' && response.data?.requiresFallbackConfirmation) {
+        // Store the payload and show confirmation modal
+        setScreeningPayload(payload);
+        setShowFallbackModal(true);
+        notify.warning(
+          "Fallback API key confirmation required",
+          response.data.message,
+          true
+        );
       } else if (response.error?.includes("already in progress") && response.data?.screeningRequestId) {
-        // Handle the case where screening is already in progress
         setScreeningRequestId(response.data.screeningRequestId);
         notify.warning(
           "Screening already in progress",
@@ -220,6 +263,17 @@ export default function AIScreeningPage() {
     } finally {
       setScreening(false);
     }
+  };
+
+  const handleConfirmFallback = () => {
+    setShowFallbackModal(false);
+    handleStartScreening(true);
+  };
+
+  const handleCancelFallback = () => {
+    setShowFallbackModal(false);
+    setScreeningPayload(null);
+    notify.info("Screening cancelled. Please add your own API key in Settings for better performance.");
   };
 
   const handleReset = () => {
@@ -697,7 +751,7 @@ export default function AIScreeningPage() {
           </div>
 
           <button
-            onClick={handleStartScreening}
+            onClick={() => handleStartScreening(false)}
             disabled={screening || !selectedJobId}
             className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50"
           >
@@ -714,6 +768,39 @@ export default function AIScreeningPage() {
             )}
           </button>
         </div>
+
+        {/* Fallback Confirmation Modal */}
+        {showFallbackModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-2xl p-6 max-w-md w-full shadow-2xl border border-border">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-warning/10 flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-warning" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">Fallback API Key Warning</h3>
+              </div>
+              
+              <p className="text-muted-foreground mb-6">
+                You are about to use the default fallback API key for AI screening. This key may have rate limits and reduced performance. For the best experience, please add your own Gemini API key in Settings.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelFallback}
+                  className="flex-1 px-4 py-3 rounded-xl border border-border bg-background hover:bg-muted/50 text-foreground font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmFallback}
+                  className="flex-1 px-4 py-3 rounded-xl bg-warning text-warning-foreground hover:bg-warning/90 font-medium transition-colors"
+                >
+                  Proceed with Fallback
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
