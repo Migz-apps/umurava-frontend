@@ -9,6 +9,7 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+//this is a comment
 export const metadata: Metadata = {
   title: "Umurava AI",
   description: "Umurava AI talent and recruitment dashboard",
