@@ -91,6 +91,8 @@ export default function AIScreeningPage() {
   const [searchField, setSearchField] = useState<"name" | "skills" | "experience">("name");
   const [resultsPage, setResultsPage] = useState(1);
   const resultsPageSize = 3;
+  const [applicantsPage, setApplicantsPage] = useState(1);
+  const applicantsPageSize = 3;
 
   useEffect(() => {
     fetchJobs();
@@ -317,7 +319,11 @@ export default function AIScreeningPage() {
     }
   });
 
-  const displayedApplicants = filteredApplicants.slice(0, 4);
+  const applicantsTotalPages = Math.ceil(filteredApplicants.length / applicantsPageSize);
+  const displayedApplicants = filteredApplicants.slice(
+    (applicantsPage - 1) * applicantsPageSize,
+    applicantsPage * applicantsPageSize
+  );
 
   // Filter and paginate screening results
   const filteredResults = (result?.result?.shortlist || []).filter((candidate: ScreeningResult) => {
@@ -769,12 +775,18 @@ export default function AIScreeningPage() {
                     type="text"
                     placeholder="Search applicants..."
                     value={applicantSearch}
-                    onChange={(e) => setApplicantSearch(e.target.value)}
+                    onChange={(e) => {
+                      setApplicantSearch(e.target.value);
+                      setApplicantsPage(1);
+                    }}
                     className="w-full pl-10 pr-10 py-2 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   {applicantSearch && (
                     <button
-                      onClick={() => setApplicantSearch("")}
+                      onClick={() => {
+                        setApplicantSearch("");
+                        setApplicantsPage(1);
+                      }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       <X className="h-4 w-4" />
@@ -783,7 +795,10 @@ export default function AIScreeningPage() {
                 </div>
                 <select
                   value={searchField}
-                  onChange={(e) => setSearchField(e.target.value as "name" | "skills" | "experience")}
+                  onChange={(e) => {
+                    setSearchField(e.target.value as "name" | "skills" | "experience");
+                    setApplicantsPage(1);
+                  }}
                   className="px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="name">By Name</option>
@@ -791,9 +806,9 @@ export default function AIScreeningPage() {
                   <option value="experience">By Experience</option>
                 </select>
               </div>
-              {applicantSearch && (
+              {filteredApplicants.length > 0 && (
                 <p className="text-sm text-muted-foreground">
-                  Found {filteredApplicants.length} applicant{filteredApplicants.length !== 1 ? 's' : ''} - showing top 4
+                  Showing {displayedApplicants.length > 0 ? ((applicantsPage - 1) * applicantsPageSize) + 1 : 0}-{Math.min(applicantsPage * applicantsPageSize, filteredApplicants.length)} of {filteredApplicants.length} applicant{filteredApplicants.length !== 1 ? 's' : ''}
                 </p>
               )}
             </div>
@@ -838,10 +853,30 @@ export default function AIScreeningPage() {
                     </button>
                   ))}
                 </div>
-                {filteredApplicants.length > 4 && (
-                  <p className="text-sm text-muted-foreground mt-3 text-center">
-                    Search to see more results ({filteredApplicants.length - 4} more available)
-                  </p>
+
+                {/* Pagination Controls */}
+                {applicantsTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-border">
+                    <button
+                      onClick={() => setApplicantsPage(p => Math.max(1, p - 1))}
+                      disabled={applicantsPage === 1}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {applicantsPage} of {applicantsTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setApplicantsPage(p => Math.min(applicantsTotalPages, p + 1))}
+                      disabled={applicantsPage === applicantsTotalPages}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
               </>
             )}
