@@ -16,6 +16,8 @@ import {
   TrendingUp,
   RefreshCw,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Mail,
   MapPin,
   BriefcaseIcon,
@@ -87,6 +89,8 @@ export default function AIScreeningPage() {
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [applicantSearch, setApplicantSearch] = useState("");
   const [searchField, setSearchField] = useState<"name" | "skills" | "experience">("name");
+  const [resultsPage, setResultsPage] = useState(1);
+  const resultsPageSize = 3;
 
   useEffect(() => {
     fetchJobs();
@@ -315,6 +319,32 @@ export default function AIScreeningPage() {
 
   const displayedApplicants = filteredApplicants.slice(0, 4);
 
+  // Filter and paginate screening results
+  const filteredResults = (result?.result?.shortlist || []).filter((candidate: ScreeningResult) => {
+    if (!applicantSearch) return true;
+    const searchLower = applicantSearch.toLowerCase();
+    const fullName = candidate.applicant?.fullName?.toLowerCase() || "";
+    const skills = candidate.applicant?.skills?.map((s: any) => s.name).join(" ").toLowerCase() || "";
+    const headline = candidate.applicant?.headline?.toLowerCase() || "";
+    
+    switch (searchField) {
+      case "name":
+        return fullName.includes(searchLower);
+      case "skills":
+        return skills.includes(searchLower);
+      case "experience":
+        return headline.includes(searchLower);
+      default:
+        return true;
+    }
+  });
+
+  const resultsTotalPages = Math.ceil(filteredResults.length / resultsPageSize);
+  const paginatedResults = filteredResults.slice(
+    (resultsPage - 1) * resultsPageSize,
+    resultsPage * resultsPageSize
+  );
+
   if (loadingJobs || loadingApplicants || loadingResult) {
     return (
       <DashboardLayout>
@@ -363,13 +393,53 @@ export default function AIScreeningPage() {
               </div>
             </div>
 
+            {/* Search Bar for Results */}
+            <div className="mb-6 flex gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search candidates..."
+                  value={applicantSearch}
+                  onChange={(event) => {
+                    setApplicantSearch(event.target.value);
+                    setResultsPage(1);
+                  }}
+                  className="w-full rounded-lg border border-input bg-background py-2.5 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <select
+                value={searchField}
+                onChange={(event) => {
+                  setSearchField(event.target.value as "name" | "skills" | "experience");
+                  setResultsPage(1);
+                }}
+                className="rounded-lg border border-input bg-background px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="name">Search by Name</option>
+                <option value="skills">Search by Skills</option>
+                <option value="experience">Search by Experience</option>
+              </select>
+            </div>
+
             {/* Ranked Candidates */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Award className="h-5 w-5 text-warning" />
-                Ranked Shortlist
-              </h3>
-              {(result.result.shortlist || []).map((candidate: ScreeningResult, index: number) => {
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Award className="h-5 w-5 text-warning" />
+                  Ranked Shortlist
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Showing {paginatedResults.length > 0 ? ((resultsPage - 1) * resultsPageSize) + 1 : 0}-{Math.min(resultsPage * resultsPageSize, filteredResults.length)} of {filteredResults.length}
+                </p>
+              </div>
+              {paginatedResults.length === 0 ? (
+                <div className="p-8 text-center rounded-xl border border-border bg-card">
+                  <p className="text-muted-foreground">No candidates found matching your search.</p>
+                </div>
+              ) : (
+                <>
+                  {paginatedResults.map((candidate: ScreeningResult, index: number) => {
                 const isExpanded = expandedCandidate === candidate.applicantId;
                 return (
                   <div key={candidate.applicantId} className="bg-card rounded-xl border border-border overflow-hidden">
@@ -555,6 +625,33 @@ export default function AIScreeningPage() {
                   </div>
                 );
               })}
+            </>
+              )}
+
+              {/* Pagination Controls */}
+              {resultsTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-border">
+                  <button
+                    onClick={() => setResultsPage(p => Math.max(1, p - 1))}
+                    disabled={resultsPage === 1}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {resultsPage} of {resultsTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setResultsPage(p => Math.min(resultsTotalPages, p + 1))}
+                    disabled={resultsPage === resultsTotalPages}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <button onClick={handleReset} className="mt-6 flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90">
